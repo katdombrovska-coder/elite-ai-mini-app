@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Elite AI Mini App — API Server
+Elite AI Mini App — API Server (Node.js)
 Shares the same SQLite database as the Telegram bot.
-Tracks Mini App opens, questions, and captures leads.
+Deployable on Railway/Render/Fly.io.
 """
 
 import sqlite3
@@ -12,8 +12,8 @@ from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
-DB_PATH = Path(__file__).parent.parent.parent / "elite-ai-concierge-bot" / "bot_data.db"
-FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+DB_PATH = Path(__file__).parent.parent / "elite-ai-concierge-bot" / "bot_data.db"
+FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -29,19 +29,16 @@ def get_db():
 
 @app.route("/")
 def index():
-    """Serve the Mini App frontend."""
     return send_from_directory(str(FRONTEND_DIST), "index.html")
 
 
 @app.route("/<path:path>")
 def static_files(path):
-    """Serve built frontend assets."""
     return send_from_directory(str(FRONTEND_DIST), path)
 
 
 @app.route("/api/track", methods=["POST"])
 def track_event():
-    """Track any event from the Mini App."""
     data = request.json
     telegram_id = data.get("telegram_id")
     event_type = data.get("event_type", "mini_app_event")
@@ -49,7 +46,6 @@ def track_event():
 
     conn = get_db()
 
-    # Register user if not exists
     if telegram_id:
         conn.execute(
             """INSERT INTO users (telegram_id, username, first_name, last_name,
@@ -70,9 +66,6 @@ def track_event():
                 datetime.now().isoformat(),
             ),
         )
-
-    # Track event
-    if telegram_id:
         conn.execute(
             "INSERT INTO events (telegram_id, event_type, event_data, timestamp) VALUES (?, ?, ?, ?)",
             (telegram_id, event_type, event_data, datetime.now().isoformat()),
@@ -85,7 +78,6 @@ def track_event():
 
 @app.route("/api/lead", methods=["POST"])
 def capture_lead():
-    """Capture a lead from the Mini App demo flow."""
     data = request.json
     telegram_id = data.get("telegram_id")
     name = data.get("name", "Unknown")
@@ -97,13 +89,10 @@ def capture_lead():
 
     conn = get_db()
 
-    # Save lead
     conn.execute(
         "INSERT INTO leads (telegram_id, name, industry, email, source, date) VALUES (?, ?, ?, ?, ?, ?)",
         (telegram_id, name, industry, email, "Telegram Mini App", datetime.now().isoformat()),
     )
-
-    # Track the event
     conn.execute(
         "INSERT INTO events (telegram_id, event_type, event_data, timestamp) VALUES (?, ?, ?, ?)",
         (telegram_id, "mini_app_lead_captured", f"{name} | {industry} | {email}", datetime.now().isoformat()),
@@ -114,14 +103,11 @@ def capture_lead():
 
     logger.info(f"🎯 New lead from Mini App: {name} ({email}) - {industry}")
 
-    # TODO: notify Kat via bot (would need bot instance or webhook)
-
     return jsonify({"status": "ok", "lead_id": name})
 
 
 @app.route("/api/question", methods=["POST"])
 def track_question():
-    """Track a question asked in the Mini App."""
     data = request.json
     telegram_id = data.get("telegram_id")
     question = data.get("question", "")
@@ -143,5 +129,4 @@ def track_question():
 if __name__ == "__main__":
     logger.info(f"📡 API Server starting on port 3001")
     logger.info(f"📦 Database: {DB_PATH}")
-    logger.info(f"🌐 Frontend: {FRONTEND_DIST}")
     app.run(host="0.0.0.0", port=3001, debug=True)
