@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { supabaseAdmin } from './supabase'
 
 const ADMIN_PASSWORD = 'elite2026'
 
@@ -38,16 +37,15 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [{ data: l }, { data: pv }, { data: cc }, { data: ev }] = await Promise.all([
-        supabaseAdmin.from('leads').select('*').order('created_at', { ascending: false }),
-        supabaseAdmin.from('page_views').select('*').order('created_at', { ascending: false }).limit(1000),
-        supabaseAdmin.from('calendly_clicks').select('*').order('created_at', { ascending: false }).limit(1000),
-        supabaseAdmin.from('events').select('*').order('created_at', { ascending: false }).limit(500),
-      ])
-      setLeads(l || [])
-      setPageViews(pv || [])
-      setCalendly(cc || [])
-      setEvents(ev || [])
+      const r = await fetch('/api/admin-data', {
+        headers: { 'Authorization': `Bearer ${ADMIN_PASSWORD}` }
+      })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const data = await r.json()
+      setLeads(data.leads || [])
+      setPageViews(data.pageViews || [])
+      setCalendly(data.calendlyClicks || [])
+      setEvents(data.events || [])
     } catch (e) {
       console.error('Dashboard fetch error:', e)
     }
@@ -80,6 +78,7 @@ export default function AdminDashboard() {
     const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
     return d.toISOString().slice(0, 10)
   }).reverse()
+  const maxLeads = Math.max(...daysAgo.map(day => leads.filter(l => l.created_at?.startsWith(day)).length), 1)
   const leadsOverTime = daysAgo.map(day => ({
     date: day.slice(5),
     leads: leads.filter(l => l.created_at?.startsWith(day)).length,
@@ -121,6 +120,7 @@ export default function AdminDashboard() {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button onClick={fetchData} style={styles.refreshBtn}>↻ Refresh</button>
+          <button onClick={() => window.location.hash = ''} style={styles.siteBtn}>View Site →</button>
           <button onClick={logout} style={styles.logoutBtn}>Logout</button>
         </div>
       </div>
@@ -183,7 +183,7 @@ export default function AdminDashboard() {
                       <div style={styles.barTrack}>
                         <div style={{
                           ...styles.bar,
-                          width: `${Math.max((d.leads / Math.max(...leadsOverTime.map(x => x.leads), 1)) * 100, 5)}%`,
+                          width: `${(d.leads / maxLeads) * 100}%`,
                         }} />
                       </div>
                       <span style={styles.barNum}>{d.leads}</span>
@@ -218,7 +218,7 @@ export default function AdminDashboard() {
                     {leads.slice(0, 6).map(l => (
                       <div key={l.id} style={styles.recentItem}>
                         <div style={styles.recentName}>{l.name || 'Anonymous'}</div>
-                        <div style={styles.recentEmail}>{l.email}</div>
+                        <div style={styles.recentEmail}>{l.email || 'No email'}</div>
                         <div style={styles.recentMeta}>
                           <span style={styles.badge}>{l.industry || 'N/A'}</span>
                           <span style={{ color: '#6b7280', fontSize: 11 }}>
@@ -239,7 +239,7 @@ export default function AdminDashboard() {
             <div style={styles.card}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h3 style={styles.cardTitle}>All Leads</h3>
-                <input placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={styles.searchInput} />
+                <input placeholder="Search name, email, industry..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={styles.searchInput} />
               </div>
               <div style={styles.tableWrap}>
                 <table style={styles.table}>
@@ -256,7 +256,7 @@ export default function AdminDashboard() {
                     {filteredLeads.map(l => (
                       <tr key={l.id} style={styles.tr}>
                         <td style={styles.td}>{l.name || '—'}</td>
-                        <td style={styles.td}><a href={`mailto:${l.email}`} style={{ color: '#818cf8' }}>{l.email}</a></td>
+                        <td style={styles.td}><a href={`mailto:${l.email}`} style={{ color: '#818cf8' }}>{l.email || '—'}</a></td>
                         <td style={styles.td}>{l.industry || '—'}</td>
                         <td style={styles.td}>{l.question ? l.question.substring(0, 60) : '—'}</td>
                         <td style={styles.td}>{l.created_at ? new Date(l.created_at).toLocaleDateString() : '—'}</td>
@@ -265,6 +265,7 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+              {filteredLeads.length === 0 && <p style={{ color: '#6b7280', textAlign: 'center', padding: 20 }}>No leads found</p>}
             </div>
           )}
 
@@ -289,8 +290,10 @@ export default function AdminDashboard() {
                 <h3 style={styles.cardTitle}>Views This Week</h3>
                 <div style={{ fontSize: 48, fontWeight: 700, color: '#818cf8' }}>{viewsThisWeek}</div>
                 <p style={{ color: '#6b7280', fontSize: 13, marginTop: 4 }}>{totalViews} total views all time</p>
-                <div style={{ marginTop: 16, fontSize: 36, fontWeight: 700, color: '#f59e0b' }}>{totalCalendly}</div>
-                <p style={{ color: '#6b7280', fontSize: 13 }}>Total Calendly clicks</p>
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #1f2937' }}>
+                  <div style={{ fontSize: 36, fontWeight: 700, color: '#f59e0b' }}>{totalCalendly}</div>
+                  <p style={{ color: '#6b7280', fontSize: 13 }}>Total Calendly clicks</p>
+                </div>
               </div>
             </div>
           )}
@@ -304,7 +307,7 @@ export default function AdminDashboard() {
                     <div key={e.id} style={styles.eventItem}>
                       <div style={styles.eventBadge}>{e.event_type}</div>
                       <div style={styles.eventData}>
-                        {typeof e.event_data === 'object' ? JSON.stringify(e.event_data) : String(e.event_data)}
+                        {typeof e.event_data === 'object' ? JSON.stringify(e.event_data) : String(e.event_data || '—')}
                       </div>
                       <div style={styles.eventTime}>
                         {e.created_at ? new Date(e.created_at).toLocaleString() : ''}
@@ -325,8 +328,9 @@ export default function AdminDashboard() {
 
 const styles = {
   container: { minHeight: '100vh', background: '#0a0a0f', color: '#e5e7eb', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', padding: 20 },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 },
   refreshBtn: { background: '#1a1a2e', border: '1px solid #334155', color: '#94a3b8', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13 },
+  siteBtn: { background: '#1e1b4b', border: '1px solid #312e81', color: '#a5b4fc', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13, textDecoration: 'none' },
   logoutBtn: { background: '#7f1d1d', border: '1px solid #991b1b', color: '#fca5a5', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontSize: 13 },
   kpiRow: { display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' },
   kpiCard: { flex: '1 1 140px', background: '#1a1a2e', borderRadius: 12, padding: '16px', borderLeft: '3px solid #818cf8' },
@@ -343,7 +347,7 @@ const styles = {
   barRow: { display: 'flex', alignItems: 'center', gap: 8 },
   barLabel: { width: 44, fontSize: 11, color: '#6b7280', textAlign: 'right' },
   barTrack: { flex: 1, height: 18, background: '#0a0a0f', borderRadius: 4, overflow: 'hidden' },
-  bar: { height: '100%', background: 'linear-gradient(90deg, #6366f1, #818cf8)', borderRadius: 4 },
+  bar: { height: '100%', background: 'linear-gradient(90deg, #6366f1, #818cf8)', borderRadius: 4, minWidth: 4 },
   barNum: { width: 20, fontSize: 11, color: '#d1d5db', textAlign: 'center' },
   industryList: { display: 'flex', flexDirection: 'column', gap: 6 },
   industryRow: { display: 'flex', alignItems: 'center', gap: 8, background: '#0a0a0f', borderRadius: 6, padding: '8px 12px' },
@@ -356,9 +360,9 @@ const styles = {
   recentEmail: { fontSize: 12, color: '#818cf8', marginTop: 2 },
   recentMeta: { display: 'flex', justifyContent: 'space-between', marginTop: 6, alignItems: 'center' },
   badge: { background: '#1e1b4b', color: '#a5b4fc', fontSize: 10, padding: '2px 6px', borderRadius: 4 },
-  searchInput: { background: '#0a0a0f', border: '1px solid #334155', color: '#e5e7eb', padding: '6px 12px', borderRadius: 8, fontSize: 13, outline: 'none' },
+  searchInput: { background: '#0a0a0f', border: '1px solid #334155', color: '#e5e7eb', padding: '6px 12px', borderRadius: 8, fontSize: 13, outline: 'none', width: 260 },
   tableWrap: { overflowX: 'auto', borderRadius: 8, border: '1px solid #1f2937' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 },
   th: { background: '#1a1a2e', color: '#6b7280', padding: '10px 12px', textAlign: 'left', fontWeight: 500, borderBottom: '1px solid #1f2937' },
   tr: { borderBottom: '1px solid #1f2937' },
   td: { padding: '8px 12px', color: '#e5e7eb' },

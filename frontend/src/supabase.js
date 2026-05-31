@@ -2,10 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = 'https://bupwdgouuosohiecfvji.supabase.co'
 const SUPABASE_ANON_KEY = 'sb_publishable_X3rsehLc9uUbQ6XfGrDQSw_Egjv5eE0'
-const SUPABASE_SERVICE_KEY = 'sb_secret_JUlezIQhwBFNLl7La9nYFg_Sld1mQPm'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 export function getSessionId() {
   let sid = localStorage.getItem('elite_session_id')
@@ -16,6 +14,7 @@ export function getSessionId() {
   return sid
 }
 
+// Track page view
 export async function trackPageView(page) {
   try {
     await supabase.from('page_views').insert({
@@ -24,18 +23,20 @@ export async function trackPageView(page) {
       user_agent: navigator.userAgent,
       referrer: document.referrer || null,
     })
-  } catch (e) { console.error('trackPageView error:', e) }
+  } catch (e) { /* silent */ }
 }
 
+// Track Calendly click
 export async function trackCalendlyClick(page) {
   try {
     await supabase.from('calendly_clicks').insert({
       page,
       session_id: getSessionId(),
     })
-  } catch (e) { console.error('trackCalendlyClick error:', e) }
+  } catch (e) {}
 }
 
+// Track any event
 export async function trackEvent(eventType, data = {}) {
   try {
     await supabase.from('events').insert({
@@ -43,26 +44,21 @@ export async function trackEvent(eventType, data = {}) {
       event_data: data,
       session_id: getSessionId(),
     })
-  } catch (e) { console.error('trackEvent error:', e) }
+  } catch (e) {}
 }
 
+// Submit a lead
 export async function submitLead(leadData) {
-  try {
-    const { data, error } = await supabase
-      .from('leads')
-      .insert({
-        name: leadData.name,
-        email: leadData.email,
-        industry: leadData.industry,
-        question: leadData.question || null,
-        source: leadData.source || 'website_demo',
-        telegram_id: leadData.telegram_id || null,
-      })
-      .select()
-    if (error) throw error
-    return data
-  } catch (e) {
-    console.error('submitLead error:', e)
-    throw e
-  }
+  const { data, error } = await supabase
+    .from('leads')
+    .insert({
+      name: leadData.name,
+      email: leadData.email,
+      industry: leadData.industry,
+      question: leadData.question || null,
+      source: leadData.source || 'website_demo',
+    })
+    .select()
+  if (error) throw error
+  return data
 }

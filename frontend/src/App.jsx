@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react'
-import { supabase, supabaseAdmin, getSessionId, trackPageView, trackCalendlyClick, trackEvent, submitLead } from './supabase'
+import { trackPageView, trackCalendlyClick, trackEvent, submitLead } from './supabase'
 import AdminDashboard from './AdminDashboard'
-
-// Check if we're on /admin
-function isAdminRoute() {
-  return window.location.pathname === '/admin' || window.location.hash === '#/admin'
-}
 
 const CALENDLY_URL = 'https://calendly.com/dombrovskakate/30min'
 
@@ -256,16 +251,18 @@ function MainSite() {
   )
 }
 
+// Simple hash-based routing
 function App() {
-  const [showAdmin, setShowAdmin] = useState(isAdminRoute())
+  const hash = window.location.hash.slice(1)
+  const [path, setPath] = useState(hash || '/')
 
   useEffect(() => {
-    const checkRoute = () => setShowAdmin(isAdminRoute())
-    window.addEventListener('hashchange', checkRoute)
-    return () => window.removeEventListener('hashchange', checkRoute)
+    const onHash = () => setPath(window.location.hash.slice(1) || '/')
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  if (showAdmin) {
+  if (path === '/admin') {
     return <AdminDashboard />
   }
   return <MainSite />
